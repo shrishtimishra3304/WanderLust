@@ -21,6 +21,8 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 app.use(express.urlencoded({ extended: true }));
 app.engine('ejs', ejsMate);
+const ExpressError = require('./utils/expresserror.js');
+const wrapAsync = require('./utils/wrapAsync.js');
 app.use(express.static(path.join(__dirname, 'public')));console.log('Server is running on port 3000');
 console.log('Connected to MongoDB');
 console.log('Error connecting to MongoDB:');
@@ -71,32 +73,48 @@ app.get('/listings/:id', async (req, res) => {
 });
 
 //create route
-app.post("/listings", async (req, res)=>{
-    const newListing = new Listing(req.body.listing);
-    await newListing.save();
-    res.redirect("/listings");
-    
-    // console.log(listing);
-})
+app.post("/listings",wrapAsync(async (req, res) => {
+    if(!req.body.listing){
+        throw new ExpressError("Invalid listing data", 400);
+    }
+    const listing = new Listing(req.body.listing);
+    await listing.save();
+    res.redirect(`/listings/${listing._id}`);
+}));
 
 //edit route
-app.get('/listings/:id/edit', async (req, res) => {
+app.get('/listings/:id/edit', wrapAsync(async (req, res) => {
     const { id } = req.params;
     const listing = await Listing.findById(id);
     res.render('listings/edit.ejs', { listing });
-});
+}));
 //update route
-app.put('/listings/:id', async (req, res) => {
+app.put('/listings/:id', wrapAsync(async (req, res) => {
     const { id } = req.params;
     await Listing.findByIdAndUpdate(id, {...req.body.listing});
     res.redirect(`/listings/${id}`);
-});  
+}));  
 //delete route
-app.delete('/listings/:id', async (req, res) => {
+app.delete('/listings/:id',wrapAsync( async (req, res) => {
     const { id } = req.params;
     await Listing.findByIdAndDelete(id);
     res.redirect('/listings');
+}));
+
+app.all("*",(req,res,next)=>{
+    next(new ExpressError("Page not found!",404));
 });
+
+//handelings errors
+app.use((err, req, res, next) => {
+    // console.log(err.stack);
+    let {message="website sudhar be!",statusCode=500}=err;
+    // res.status(statusCode).send(message);
+    res.status(statusCode).render('error.ejs',{err} );
+});
+
+
+
 app.listen(3000, () => {
     console.log('Server is running on port 3000');
 });
